@@ -124,6 +124,11 @@ if (BUILD_FRANKA)
   add_executable(cartesian-velocity franka-interface/src/test/test_cartesian_velocity_control.cpp)
   target_link_libraries(cartesian-velocity deoxys::shared_protobuf ${FRANKA_LIBS} deoxys::shared_utils)
 
+  # Test libfranka exception capture without connecting to a robot.
+  add_executable(control-exception-utils-test
+    franka-interface/src/test/test_control_exception_utils.cpp)
+  target_link_libraries(control-exception-utils-test Franka::Franka Threads::Threads)
+
 
   install(TARGETS
     franka-interface
