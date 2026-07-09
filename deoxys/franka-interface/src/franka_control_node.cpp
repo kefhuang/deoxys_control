@@ -16,6 +16,7 @@
 #include <spdlog/spdlog.h>
 
 #include "utils/common_utils.h"
+#include "utils/control_exception_utils.h"
 #include "utils/control_utils.h"
 #include "utils/log_utils.h"
 #include "utils/robot_utils.h"
@@ -536,6 +537,7 @@ int main(int argc, char **argv) {
 
     // Main loop
     global_handler->logger->info("Deoxys starting");
+    bool control_failed = false;
     while (!global_handler->termination) {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
       // If controller_type changes, exit robot control loop and reinitialize.
@@ -553,39 +555,61 @@ int main(int argc, char **argv) {
         if (controller_type == ControllerType::NO_CONTROL)
           continue;
         // Choose which control callback functions
-        if (controller_type == ControllerType::OSC_POSE ||
-            controller_type == ControllerType::OSC_POSITION ||
-            controller_type == ControllerType::OSC_YAW) {
-          // OSC control callback
-          robot.control(
-              control_callbacks::CreateTorqueFromCartesianSpaceCallback(
-                  global_handler, state_publisher, model, current_state_info,
-                  goal_state_info, policy_rate, traj_rate));
-        } else if (controller_type == ControllerType::JOINT_IMPEDANCE) {
-          // Joint Impedance control callback
-          global_handler->logger->info("Joint impedance callback");
-          robot.control(control_callbacks::CreateTorqueFromJointSpaceCallback(
-              global_handler, state_publisher, model, current_state_info,
-              goal_state_info, policy_rate, traj_rate));
-        } else if (controller_type == ControllerType::JOINT_POSITION) {
-          // Joint Position control callback
-          global_handler->logger->info("Joint position callback");
-          robot.control(control_callbacks::CreateJointPositionCallback(
-              global_handler, state_publisher, model, current_state_info,
-              goal_state_info, policy_rate, traj_rate));
-        } else if (controller_type == ControllerType::CARTESIAN_VELOCITY) {
-          // Cartesian Velocity control callback
-          global_handler->logger->info("Cartesian velocity callback");
-          robot.control(control_callbacks::CreateCartesianVelocitiesCallback(
-              global_handler, state_publisher, model, current_state_info,
-              goal_state_info, policy_rate, traj_rate));
+        const auto control_result =
+            control_exception_utils::RunWithShutdownOnFrankaException(
+                [&]() {
+                  if (controller_type == ControllerType::OSC_POSE ||
+                      controller_type == ControllerType::OSC_POSITION ||
+                      controller_type == ControllerType::OSC_YAW) {
+                    robot.control(
+                        control_callbacks::CreateTorqueFromCartesianSpaceCallback(
+                            global_handler, state_publisher, model,
+                            current_state_info, goal_state_info, policy_rate,
+                            traj_rate));
+                  } else if (controller_type == ControllerType::JOINT_IMPEDANCE) {
+                    global_handler->logger->info("Joint impedance callback");
+                    robot.control(
+                        control_callbacks::CreateTorqueFromJointSpaceCallback(
+                            global_handler, state_publisher, model,
+                            current_state_info, goal_state_info, policy_rate,
+                            traj_rate));
+                  } else if (controller_type == ControllerType::JOINT_POSITION) {
+                    global_handler->logger->info("Joint position callback");
+                    robot.control(control_callbacks::CreateJointPositionCallback(
+                        global_handler, state_publisher, model,
+                        current_state_info, goal_state_info, policy_rate,
+                        traj_rate));
+                  } else if (controller_type ==
+                             ControllerType::CARTESIAN_VELOCITY) {
+                    global_handler->logger->info(
+                        "Cartesian velocity callback");
+                    robot.control(
+                        control_callbacks::CreateCartesianVelocitiesCallback(
+                            global_handler, state_publisher, model,
+                            current_state_info, goal_state_info, policy_rate,
+                            traj_rate));
+                  }
+                },
+                global_handler->running,
+                global_handler->termination);
+
+        if (!control_result.succeeded) {
+          global_handler->logger->error(
+              "robot.control failed: {0}", control_result.error_message);
+          global_handler->logger->flush();
+          control_failed = true;
         }
       }
       global_handler->time = 0.0;
     }
     state_publisher->StopPublishing();
 
-    control_msg_sub.join();
+    if (control_msg_sub.joinable()) {
+      control_msg_sub.join();
+    }
+    if (control_failed) {
+      return -1;
+    }
   } catch (franka::Exception const &e) {
     auto logger = log_utils::get_logger(
         config["ARM_LOGGER"]["CONSOLE"]["LOGGER_NAME"].as<std::string>());
