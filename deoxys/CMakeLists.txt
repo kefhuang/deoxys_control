@@ -129,6 +129,11 @@ if (BUILD_FRANKA)
     franka-interface/src/test/test_control_exception_utils.cpp)
   target_link_libraries(control-exception-utils-test Franka::Franka Threads::Threads)
 
+  # Test that Cartesian velocity control enables libfranka rate limiting.
+  add_executable(cartesian-velocity-control-utils-test
+    franka-interface/src/test/test_cartesian_velocity_control_utils.cpp)
+  target_link_libraries(cartesian-velocity-control-utils-test Franka::Franka)
+
 
   install(TARGETS
     franka-interface
