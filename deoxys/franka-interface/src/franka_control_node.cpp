@@ -14,6 +14,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <spdlog/spdlog.h>
+#include <spdlog/fmt/ranges.h>
 
 #include "utils/common_utils.h"
 #include "utils/cartesian_velocity_control_utils.h"
@@ -600,6 +601,7 @@ int main(int argc, char **argv) {
                              ControllerType::CARTESIAN_VELOCITY) {
                     global_handler->logger->info(
                         "Cartesian velocity callback");
+                    global_handler->cartesian_velocity_diagnostics.Clear();
                     cartesian_velocity_control_utils::RunWithRateLimiting(
                         robot,
                         control_callbacks::CreateCartesianVelocitiesCallback(
@@ -615,6 +617,33 @@ int main(int argc, char **argv) {
           global_handler->logger->error("{0} failed: {1}",
                                         control_result.operation_name,
                                         control_result.error_message);
+          if (controller_type == ControllerType::CARTESIAN_VELOCITY) {
+            const auto samples =
+                global_handler->cartesian_velocity_diagnostics.Snapshot();
+            global_handler->logger->info(
+                "Writing {0} Cartesian velocity diagnostic samples to the "
+                "debug log",
+                samples.size());
+            for (const auto& sample : samples) {
+              global_handler->logger->debug(
+                  "cartesian_velocity_diagnostic time={0} raw=[{1}] "
+                  "O_dP_EE_c=[{2}] O_ddP_EE_c=[{3}] q=[{4}] dq=[{5}] "
+                  "q_d=[{6}] dq_d=[{7}] ddq_d=[{8}] elbow=[{9}] "
+                  "elbow_d=[{10}] elbow_c=[{11}] delbow_c=[{12}] "
+                  "ddelbow_c=[{13}]",
+                  sample.time, fmt::join(sample.raw_command, ","),
+                  fmt::join(sample.O_dP_EE_c, ","),
+                  fmt::join(sample.O_ddP_EE_c, ","),
+                  fmt::join(sample.q, ","), fmt::join(sample.dq, ","),
+                  fmt::join(sample.q_d, ","), fmt::join(sample.dq_d, ","),
+                  fmt::join(sample.ddq_d, ","),
+                  fmt::join(sample.elbow, ","),
+                  fmt::join(sample.elbow_d, ","),
+                  fmt::join(sample.elbow_c, ","),
+                  fmt::join(sample.delbow_c, ","),
+                  fmt::join(sample.ddelbow_c, ","));
+            }
+          }
           global_handler->logger->flush();
           control_failed = true;
         }

@@ -140,6 +140,11 @@ if (BUILD_FRANKA)
   target_link_libraries(cosine-cartesian-velocity-interpolator-test
     Eigen3::Eigen3 Threads::Threads)
 
+  # Test fixed-capacity Cartesian velocity failure telemetry.
+  add_executable(cartesian-velocity-diagnostics-test
+    franka-interface/src/test/test_cartesian_velocity_diagnostics.cpp)
+  target_link_libraries(cartesian-velocity-diagnostics-test Franka::Franka)
+
 
   install(TARGETS
     franka-interface

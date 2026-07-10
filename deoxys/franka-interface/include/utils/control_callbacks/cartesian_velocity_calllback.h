@@ -75,6 +75,8 @@ namespace control_callbacks {
                                                                 global_handler->min_rot_speed,
                                                                 global_handler->max_rot_speed
                 );
+                global_handler->cartesian_velocity_diagnostics.Record(
+                    global_handler->time, robot_state, vel_d_array);
                 std::chrono::high_resolution_clock::time_point t2 =
                     std::chrono::high_resolution_clock::now();
                 auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
@@ -85,4 +87,3 @@ namespace control_callbacks {
 } // namespace control_callbacks
 
 #endif // UTILS_CONTROL_CALLBACKS_CARTESIAN_VELOCITY_CALLBACK_H_
-

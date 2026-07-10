@@ -5,6 +5,7 @@
 #include <spdlog/spdlog.h>
 
 #include "controllers/base_controller.h"
+#include "utils/cartesian_velocity_diagnostics.h"
 #include "utils/control_utils.h"
 #include "utils/traj_interpolators/base_traj_interpolator.h"
 
@@ -29,6 +30,8 @@ struct SharedMemory {
   std::atomic<double> min_trans_speed;
   std::atomic<double> max_rot_speed;
   std::atomic<double> min_rot_speed;
+
+  cartesian_velocity_diagnostics::Buffer<> cartesian_velocity_diagnostics;
 
   // for trajectory interpolation
   double traj_interpolator_time_fraction = 1.0;
