@@ -134,6 +134,12 @@ if (BUILD_FRANKA)
     franka-interface/src/test/test_cartesian_velocity_control_utils.cpp)
   target_link_libraries(cartesian-velocity-control-utils-test Franka::Franka)
 
+  # Test 1 kHz cosine Cartesian velocity interpolation continuity.
+  add_executable(cosine-cartesian-velocity-interpolator-test
+    franka-interface/src/test/test_cosine_cartesian_velocity_traj_interpolator.cpp)
+  target_link_libraries(cosine-cartesian-velocity-interpolator-test
+    Eigen3::Eigen3 Threads::Threads)
+
 
   install(TARGETS
     franka-interface
