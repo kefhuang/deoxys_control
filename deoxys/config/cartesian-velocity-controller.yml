@@ -4,7 +4,7 @@ is_delta: false
 
 traj_interpolator_cfg:
   traj_interpolator_type: COSINE_CARTESIAN_VELOCITY
-  time_fraction: 0.3
+  time_fraction: 0.5
 
 action_scale:
   translation: 1.0

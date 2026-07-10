@@ -140,6 +140,13 @@ if (BUILD_FRANKA)
   target_link_libraries(cosine-cartesian-velocity-interpolator-test
     Eigen3::Eigen3 Threads::Threads)
 
+  # Test the safety-critical Cartesian velocity transition duration.
+  add_executable(cartesian-velocity-controller-config-test
+    franka-interface/src/test/test_cartesian_velocity_controller_config.cpp)
+  target_compile_definitions(cartesian-velocity-controller-config-test PRIVATE
+    DEOXYS_CARTESIAN_VELOCITY_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/config/cartesian-velocity-controller.yml")
+  target_link_libraries(cartesian-velocity-controller-config-test yaml-cpp)
+
   # Test fixed-capacity Cartesian velocity failure telemetry.
   add_executable(cartesian-velocity-diagnostics-test
     franka-interface/src/test/test_cartesian_velocity_diagnostics.cpp)
