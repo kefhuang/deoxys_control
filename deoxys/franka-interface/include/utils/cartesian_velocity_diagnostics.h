@@ -11,6 +11,7 @@ namespace cartesian_velocity_diagnostics {
 struct Sample {
   double time = 0.0;
   std::array<double, 6> raw_command{};
+  std::array<double, 6> O_dP_EE_d{};   // NOLINT
   std::array<double, 6> O_dP_EE_c{};   // NOLINT
   std::array<double, 6> O_ddP_EE_c{};  // NOLINT
   std::array<double, 7> q{};
@@ -33,9 +34,14 @@ class Buffer {
   void Record(double time,
               const franka::RobotState& state,
               const std::array<double, 6>& raw_command) {
+    if (frozen_) {
+      return;
+    }
+
     Sample& sample = samples_[write_index_];
     sample.time = time;
     sample.raw_command = raw_command;
+    sample.O_dP_EE_d = state.O_dP_EE_d;
     sample.O_dP_EE_c = state.O_dP_EE_c;
     sample.O_ddP_EE_c = state.O_ddP_EE_c;
     sample.q = state.q;
@@ -53,6 +59,21 @@ class Buffer {
     if (sample_count_ < Capacity) {
       ++sample_count_;
     }
+
+    double raw_norm_squared = 0.0;
+    double commanded_norm_squared = 0.0;
+    for (std::size_t i = 0; i < raw_command.size(); ++i) {
+      raw_norm_squared += raw_command[i] * raw_command[i];
+      commanded_norm_squared += state.O_dP_EE_c[i] * state.O_dP_EE_c[i];
+    }
+    if (raw_norm_squared > 1e-12 && commanded_norm_squared <= 1e-24) {
+      ++command_state_mismatch_count_;
+      if (command_state_mismatch_count_ >= 5) {
+        frozen_ = true;
+      }
+    } else {
+      command_state_mismatch_count_ = 0;
+    }
   }
 
   std::vector<Sample> Snapshot() const {
@@ -69,12 +90,18 @@ class Buffer {
   void Clear() {
     write_index_ = 0;
     sample_count_ = 0;
+    command_state_mismatch_count_ = 0;
+    frozen_ = false;
   }
+
+  bool IsFrozen() const { return frozen_; }
 
  private:
   std::array<Sample, Capacity> samples_{};
   std::size_t write_index_ = 0;
   std::size_t sample_count_ = 0;
+  std::size_t command_state_mismatch_count_ = 0;
+  bool frozen_ = false;
 };
 
 }  // namespace cartesian_velocity_diagnostics

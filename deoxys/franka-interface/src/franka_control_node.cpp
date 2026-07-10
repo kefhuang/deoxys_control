@@ -627,11 +627,12 @@ int main(int argc, char **argv) {
             for (const auto& sample : samples) {
               global_handler->logger->debug(
                   "cartesian_velocity_diagnostic time={0} raw=[{1}] "
-                  "O_dP_EE_c=[{2}] O_ddP_EE_c=[{3}] q=[{4}] dq=[{5}] "
-                  "q_d=[{6}] dq_d=[{7}] ddq_d=[{8}] elbow=[{9}] "
-                  "elbow_d=[{10}] elbow_c=[{11}] delbow_c=[{12}] "
-                  "ddelbow_c=[{13}]",
+                  "O_dP_EE_d=[{2}] O_dP_EE_c=[{3}] O_ddP_EE_c=[{4}] "
+                  "q=[{5}] dq=[{6}] q_d=[{7}] dq_d=[{8}] ddq_d=[{9}] "
+                  "elbow=[{10}] elbow_d=[{11}] elbow_c=[{12}] "
+                  "delbow_c=[{13}] ddelbow_c=[{14}]",
                   sample.time, fmt::join(sample.raw_command, ","),
+                  fmt::join(sample.O_dP_EE_d, ","),
                   fmt::join(sample.O_dP_EE_c, ","),
                   fmt::join(sample.O_ddP_EE_c, ","),
                   fmt::join(sample.q, ","), fmt::join(sample.dq, ","),
