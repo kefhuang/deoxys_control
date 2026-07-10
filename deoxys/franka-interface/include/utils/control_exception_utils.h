@@ -10,11 +10,13 @@ namespace control_exception_utils {
 
 struct ControlCallResult {
   bool succeeded;
+  std::string operation_name;
   std::string error_message;
 };
 
 template <typename Callable>
 ControlCallResult RunWithShutdownOnFrankaException(
+    const std::string& operation_name,
     Callable&& control_call,
     std::atomic_bool& running,
     std::atomic_bool& termination) {
@@ -23,9 +25,9 @@ ControlCallResult RunWithShutdownOnFrankaException(
   } catch (const franka::Exception& exception) {
     running = false;
     termination = true;
-    return {false, exception.what()};
+    return {false, operation_name, exception.what()};
   }
-  return {true, ""};
+  return {true, "", ""};
 }
 
 }  // namespace control_exception_utils

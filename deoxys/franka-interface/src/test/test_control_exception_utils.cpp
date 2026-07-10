@@ -19,6 +19,7 @@ int main() {
 
   const auto failure =
       control_exception_utils::RunWithShutdownOnFrankaException(
+          "robot.readOnce",
           []() { throw franka::Exception("sentinel control failure"); },
           running,
           termination);
@@ -35,6 +36,10 @@ int main() {
     std::cerr << "exception message was not preserved" << std::endl;
     return 1;
   }
+  if (failure.operation_name != "robot.readOnce") {
+    std::cerr << "failing operation name was not preserved" << std::endl;
+    return 1;
+  }
   if (running || !termination) {
     std::cerr << "shutdown flags were not updated" << std::endl;
     return 1;
@@ -44,8 +49,9 @@ int main() {
   termination = false;
   const auto success =
       control_exception_utils::RunWithShutdownOnFrankaException(
-          []() {}, running, termination);
-  if (!success.succeeded || !success.error_message.empty()) {
+          "robot.control", []() {}, running, termination);
+  if (!success.succeeded || !success.error_message.empty() ||
+      !success.operation_name.empty()) {
     std::cerr << "non-throwing call did not report success" << std::endl;
     return 1;
   }

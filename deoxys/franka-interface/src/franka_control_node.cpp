@@ -550,13 +550,29 @@ int main(int argc, char **argv) {
       }
 
       if (global_handler->running) {
-        init_state = robot.readOnce();
-        state_publisher->UpdateNewState(init_state, &model);
+        const auto read_result =
+            control_exception_utils::RunWithShutdownOnFrankaException(
+                "robot.readOnce",
+                [&]() {
+                  init_state = robot.readOnce();
+                  state_publisher->UpdateNewState(init_state, &model);
+                },
+                global_handler->running,
+                global_handler->termination);
+        if (!read_result.succeeded) {
+          global_handler->logger->error("{0} failed: {1}",
+                                        read_result.operation_name,
+                                        read_result.error_message);
+          global_handler->logger->flush();
+          control_failed = true;
+          continue;
+        }
         if (controller_type == ControllerType::NO_CONTROL)
           continue;
         // Choose which control callback functions
         const auto control_result =
             control_exception_utils::RunWithShutdownOnFrankaException(
+                "robot.control",
                 [&]() {
                   if (controller_type == ControllerType::OSC_POSE ||
                       controller_type == ControllerType::OSC_POSITION ||
@@ -594,8 +610,9 @@ int main(int argc, char **argv) {
                 global_handler->termination);
 
         if (!control_result.succeeded) {
-          global_handler->logger->error(
-              "robot.control failed: {0}", control_result.error_message);
+          global_handler->logger->error("{0} failed: {1}",
+                                        control_result.operation_name,
+                                        control_result.error_message);
           global_handler->logger->flush();
           control_failed = true;
         }
