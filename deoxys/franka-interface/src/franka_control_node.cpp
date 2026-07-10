@@ -16,6 +16,7 @@
 #include <spdlog/spdlog.h>
 
 #include "utils/common_utils.h"
+#include "utils/cartesian_velocity_control_utils.h"
 #include "utils/control_exception_utils.h"
 #include "utils/control_utils.h"
 #include "utils/log_utils.h"
@@ -599,7 +600,8 @@ int main(int argc, char **argv) {
                              ControllerType::CARTESIAN_VELOCITY) {
                     global_handler->logger->info(
                         "Cartesian velocity callback");
-                    robot.control(
+                    cartesian_velocity_control_utils::RunWithRateLimiting(
+                        robot,
                         control_callbacks::CreateCartesianVelocitiesCallback(
                             global_handler, state_publisher, model,
                             current_state_info, goal_state_info, policy_rate,
