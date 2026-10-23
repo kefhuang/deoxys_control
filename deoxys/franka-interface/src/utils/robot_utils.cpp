@@ -242,10 +242,10 @@ StatePublisher::StatePublisher(std::string pub_port, int state_pub_rate)
 StatePublisher::~StatePublisher() {}
 
 void StatePublisher::StartPublishing() {
-  running_ = true;
+  running_.store(true, std::memory_order_release);
   state_pub_thread_ = std::thread([&]() {
     int count = 0;
-    while (running_) {
+    while (running_.load(std::memory_order_acquire)) {
       franka::RobotState current_robot_state;
 
       if (state_.mutex.try_lock()) {
@@ -270,23 +270,15 @@ void StatePublisher::StartPublishing() {
 }
 
 void StatePublisher::StopPublishing() {
-  running_ = false;
+  running_.store(false, std::memory_order_release);
   state_pub_thread_.join();
 }
 
 void StatePublisher::UpdateNewState(const franka::RobotState &robot_state,
                                     const franka::Model *robot_model) {
+  (void)robot_model;
   if (state_.mutex.try_lock()) {
     state_.robot_state = robot_state;
-    int n_frame = 0;
-    for (franka::Frame frame = franka::Frame::kJoint1;
-         frame <= franka::Frame::kEndEffector; frame++) {
-      auto pose = robot_model->pose(frame, robot_state);
-      for (int i = 0; i < 16; i++) {
-        state_.current_robot_frames[n_frame * 16 + i] = pose[i];
-      }
-      n_frame++;
-    }
     state_.mutex.unlock();
   }
 }

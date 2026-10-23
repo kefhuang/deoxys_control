@@ -1,6 +1,7 @@
 // Copyright 2022 Yifeng Zhu
 
 #include <Eigen/Core>
+#include <atomic>
 
 #include <franka/control_types.h>
 #include <franka/duration.h>
@@ -44,12 +45,11 @@ protected:
   robot_utils::FrankaRobotStateUtils robot_state_utils_;
   struct {
     franka::RobotState robot_state;
-    std::array<double, 144> current_robot_frames;
     std::mutex mutex;
   } state_;
   zmq_utils::ZMQPublisher zmq_publisher_;
   int state_pub_rate_;
-  bool running_;
+  std::atomic_bool running_{false};
 
 public:
   StatePublisher(std::string pub_port, int state_pub_rate);

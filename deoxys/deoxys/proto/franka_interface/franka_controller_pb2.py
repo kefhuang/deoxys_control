@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n(franka-interface/franka_controller.proto\x1a\x19google/protobuf/any.proto\"q\n\tJointGoal\x12\x10\n\x08is_delta\x18\x01 \x01(\x08\x12\n\n\x02q1\x18\x02 \x01(\x01\x12\n\n\x02q2\x18\x03 \x01(\x01\x12\n\n\x02q3\x18\x04 \x01(\x01\x12\n\n\x02q4\x18\x05 \x01(\x01\x12\n\n\x02q5\x18\x06 \x01(\x01\x12\n\n\x02q6\x18\x07 \x01(\x01\x12\n\n\x02q7\x18\x08 \x01(\x01\"]\n\x04Goal\x12\x10\n\x08is_delta\x18\x01 \x01(\x08\x12\t\n\x01x\x18\x02 \x01(\x01\x12\t\n\x01y\x18\x03 \x01(\x01\x12\t\n\x01z\x18\x04 \x01(\x01\x12\n\n\x02\x61x\x18\x05 \x01(\x01\x12\n\n\x02\x61y\x18\x06 \x01(\x01\x12\n\n\x02\x61z\x18\x07 \x01(\x01\"i\n\x1a\x45xponentialSmoothingConfig\x12\x0f\n\x07\x61lpha_q\x18\x01 \x01(\x01\x12\x10\n\x08\x61lpha_dq\x18\x02 \x01(\x01\x12\x11\n\talpha_eef\x18\x03 \x01(\x01\x12\x15\n\ralpha_eef_vel\x18\x04 \x01(\x01\"\xe6\x01\n\x1b\x46rankaStateEstimatorMessage\x12\x15\n\ris_estimation\x18\x01 \x01(\x08\x12\x42\n\x0e\x65stimator_type\x18\x02 \x01(\x0e\x32*.FrankaStateEstimatorMessage.EstimatorType\x12$\n\x06\x63onfig\x18\x05 \x01(\x0b\x32\x14.google.protobuf.Any\"F\n\rEstimatorType\x12\x10\n\x0cNO_ESTIMATOR\x10\x00\x12#\n\x1f\x45XPONENTIAL_SMOOTHING_ESTIMATOR\x10\x01\"6\n\x19\x46rankaOSCControllerConfig\x12\x19\n\x11residual_mass_vec\x18\x01 \x03(\x01\",\n\x1a\x46rankaGripperHomingMessage\x12\x0e\n\x06homing\x18\x01 \x01(\x08\"8\n\x18\x46rankaGripperMoveMessage\x12\r\n\x05width\x18\x01 \x01(\x01\x12\r\n\x05speed\x18\x02 \x01(\x01\"(\n\x18\x46rankaGripperStopMessage\x12\x0c\n\x04stop\x18\x01 \x01(\x08\"v\n\x19\x46rankaGripperGraspMessage\x12\r\n\x05width\x18\x01 \x01(\x01\x12\r\n\x05speed\x18\x02 \x01(\x01\x12\r\n\x05\x66orce\x18\x03 \x01(\x01\x12\x15\n\repsilon_inner\x18\x04 \x01(\x01\x12\x15\n\repsilon_outer\x18\x05 \x01(\x01\"]\n\x1b\x46rankaGripperControlMessage\x12\x13\n\x0btermination\x18\x01 \x01(\x08\x12)\n\x0b\x63ontrol_msg\x18\x02 \x01(\x0b\x32\x14.google.protobuf.Any\"H\n\x1c\x46rankaDummyControllerMessage\x12\x13\n\x04goal\x18\x01 \x01(\x0b\x32\x05.Goal\x12\x13\n\x0btermination\x18\x02 \x01(\x08\"\xb5\x01\n\x1e\x46rankaOSCPoseControllerMessage\x12\x13\n\x04goal\x18\x01 \x01(\x0b\x32\x05.Goal\x12\x1f\n\x17translational_stiffness\x18\x02 \x03(\x01\x12\x1c\n\x14rotational_stiffness\x18\x03 \x03(\x01\x12\x13\n\x0btermination\x18\x04 \x01(\x08\x12*\n\x06\x63onfig\x18\x05 \x01(\x0b\x32\x1a.FrankaOSCControllerConfig\"z\n$FrankaJointPositionControllerMessage\x12\x18\n\x04goal\x18\x01 \x01(\x0b\x32\n.JointGoal\x12\x10\n\x08kp_gains\x18\x02 \x01(\x01\x12\x10\n\x08kd_gains\x18\x03 \x01(\x01\x12\x14\n\x0cspeed_factor\x18\x04 \x01(\x01\"Y\n%FrankaJointImpedanceControllerMessage\x12\x18\n\x04goal\x18\x01 \x01(\x0b\x32\n.JointGoal\x12\n\n\x02kp\x18\x02 \x03(\x01\x12\n\n\x02kd\x18\x03 \x03(\x01\"y\n(FrankaCartesianVelocityControllerMessage\x12\x13\n\x04goal\x18\x01 \x01(\x0b\x32\x05.Goal\x12\x10\n\x08kp_gains\x18\x02 \x01(\x01\x12\x10\n\x08kd_gains\x18\x03 \x01(\x01\x12\x14\n\x0cspeed_factor\x18\x04 \x01(\x01\"d\n$FrankaJointVelocityControllerMessage\x12\x18\n\x04goal\x18\x01 \x01(\x0b\x32\n.JointGoal\x12\x10\n\x08kp_gains\x18\x02 \x01(\x01\x12\x10\n\x08kd_gains\x18\x03 \x01(\x01\"b\n\"FrankaJointTorqueControllerMessage\x12\x18\n\x04goal\x18\x01 \x01(\x0b\x32\n.JointGoal\x12\x10\n\x08kp_gains\x18\x02 \x01(\x01\x12\x10\n\x08kd_gains\x18\x03 \x01(\x01\"\xf5\x05\n\x14\x46rankaControlMessage\x12\x13\n\x0btermination\x18\x01 \x01(\x08\x12=\n\x0f\x63ontroller_type\x18\x02 \x01(\x0e\x32$.FrankaControlMessage.ControllerType\x12J\n\x16traj_interpolator_type\x18\x03 \x01(\x0e\x32*.FrankaControlMessage.TrajInterpolatorType\x12\'\n\x1ftraj_interpolator_time_fraction\x18\x04 \x01(\x01\x12)\n\x0b\x63ontrol_msg\x18\x05 \x01(\x0b\x32\x14.google.protobuf.Any\x12\x0f\n\x07timeout\x18\x06 \x01(\x01\x12\x39\n\x13state_estimator_msg\x18\x07 \x01(\x0b\x32\x1c.FrankaStateEstimatorMessage\"\xae\x01\n\x0e\x43ontrollerType\x12\x0e\n\nNO_CONTROL\x10\x00\x12\x0c\n\x08OSC_POSE\x10\x01\x12\x10\n\x0cOSC_POSITION\x10\x02\x12\x12\n\x0eJOINT_POSITION\x10\x03\x12\x13\n\x0fJOINT_IMPEDANCE\x10\x04\x12\x12\n\x0eJOINT_VELOCITY\x10\x05\x12\n\n\x06TORQUE\x10\x06\x12\x0b\n\x07OSC_YAW\x10\x07\x12\x16\n\x12\x43\x41RTESIAN_VELOCITY\x10\x08\"\xeb\x01\n\x14TrajInterpolatorType\x12\t\n\x05NO_OP\x10\x00\x12\x13\n\x0fLINEAR_POSITION\x10\x01\x12\x0f\n\x0bLINEAR_POSE\x10\x02\x12\x11\n\rMIN_JERK_POSE\x10\x03\x12\x19\n\x15SMOOTH_JOINT_POSITION\x10\x04\x12\x1b\n\x17MIN_JERK_JOINT_POSITION\x10\x05\x12\x19\n\x15LINEAR_JOINT_POSITION\x10\x06\x12\x1d\n\x19\x43OSINE_CARTESIAN_VELOCITY\x10\x07\x12\x1d\n\x19LINEAR_CARTESIAN_VELOCITY\x10\x08\x62\x06proto3'
+  serialized_pb=b'\n(franka-interface/franka_controller.proto\x1a\x19google/protobuf/any.proto\"q\n\tJointGoal\x12\x10\n\x08is_delta\x18\x01 \x01(\x08\x12\n\n\x02q1\x18\x02 \x01(\x01\x12\n\n\x02q2\x18\x03 \x01(\x01\x12\n\n\x02q3\x18\x04 \x01(\x01\x12\n\n\x02q4\x18\x05 \x01(\x01\x12\n\n\x02q5\x18\x06 \x01(\x01\x12\n\n\x02q6\x18\x07 \x01(\x01\x12\n\n\x02q7\x18\x08 \x01(\x01\"]\n\x04Goal\x12\x10\n\x08is_delta\x18\x01 \x01(\x08\x12\t\n\x01x\x18\x02 \x01(\x01\x12\t\n\x01y\x18\x03 \x01(\x01\x12\t\n\x01z\x18\x04 \x01(\x01\x12\n\n\x02\x61x\x18\x05 \x01(\x01\x12\n\n\x02\x61y\x18\x06 \x01(\x01\x12\n\n\x02\x61z\x18\x07 \x01(\x01\"i\n\x1a\x45xponentialSmoothingConfig\x12\x0f\n\x07\x61lpha_q\x18\x01 \x01(\x01\x12\x10\n\x08\x61lpha_dq\x18\x02 \x01(\x01\x12\x11\n\talpha_eef\x18\x03 \x01(\x01\x12\x15\n\ralpha_eef_vel\x18\x04 \x01(\x01\"\xe6\x01\n\x1b\x46rankaStateEstimatorMessage\x12\x15\n\ris_estimation\x18\x01 \x01(\x08\x12\x42\n\x0e\x65stimator_type\x18\x02 \x01(\x0e\x32*.FrankaStateEstimatorMessage.EstimatorType\x12$\n\x06\x63onfig\x18\x05 \x01(\x0b\x32\x14.google.protobuf.Any\"F\n\rEstimatorType\x12\x10\n\x0cNO_ESTIMATOR\x10\x00\x12#\n\x1f\x45XPONENTIAL_SMOOTHING_ESTIMATOR\x10\x01\"6\n\x19\x46rankaOSCControllerConfig\x12\x19\n\x11residual_mass_vec\x18\x01 \x03(\x01\",\n\x1a\x46rankaGripperHomingMessage\x12\x0e\n\x06homing\x18\x01 \x01(\x08\"8\n\x18\x46rankaGripperMoveMessage\x12\r\n\x05width\x18\x01 \x01(\x01\x12\r\n\x05speed\x18\x02 \x01(\x01\"(\n\x18\x46rankaGripperStopMessage\x12\x0c\n\x04stop\x18\x01 \x01(\x08\"v\n\x19\x46rankaGripperGraspMessage\x12\r\n\x05width\x18\x01 \x01(\x01\x12\r\n\x05speed\x18\x02 \x01(\x01\x12\r\n\x05\x66orce\x18\x03 \x01(\x01\x12\x15\n\repsilon_inner\x18\x04 \x01(\x01\x12\x15\n\repsilon_outer\x18\x05 \x01(\x01\"]\n\x1b\x46rankaGripperControlMessage\x12\x13\n\x0btermination\x18\x01 \x01(\x08\x12)\n\x0b\x63ontrol_msg\x18\x02 \x01(\x0b\x32\x14.google.protobuf.Any\"H\n\x1c\x46rankaDummyControllerMessage\x12\x13\n\x04goal\x18\x01 \x01(\x0b\x32\x05.Goal\x12\x13\n\x0btermination\x18\x02 \x01(\x08\"\xb5\x01\n\x1e\x46rankaOSCPoseControllerMessage\x12\x13\n\x04goal\x18\x01 \x01(\x0b\x32\x05.Goal\x12\x1f\n\x17translational_stiffness\x18\x02 \x03(\x01\x12\x1c\n\x14rotational_stiffness\x18\x03 \x03(\x01\x12\x13\n\x0btermination\x18\x04 \x01(\x08\x12*\n\x06\x63onfig\x18\x05 \x01(\x0b\x32\x1a.FrankaOSCControllerConfig\"\x90\x01\n$FrankaJointPositionControllerMessage\x12\x18\n\x04goal\x18\x01 \x01(\x0b\x32\n.JointGoal\x12\x10\n\x08kp_gains\x18\x02 \x01(\x01\x12\x10\n\x08kd_gains\x18\x03 \x01(\x01\x12\x14\n\x0cspeed_factor\x18\x04 \x01(\x01\x12\x14\n\x0c\x64q_reference\x18\x05 \x03(\x01\"Y\n%FrankaJointImpedanceControllerMessage\x12\x18\n\x04goal\x18\x01 \x01(\x0b\x32\n.JointGoal\x12\n\n\x02kp\x18\x02 \x03(\x01\x12\n\n\x02kd\x18\x03 \x03(\x01\"y\n(FrankaCartesianVelocityControllerMessage\x12\x13\n\x04goal\x18\x01 \x01(\x0b\x32\x05.Goal\x12\x10\n\x08kp_gains\x18\x02 \x01(\x01\x12\x10\n\x08kd_gains\x18\x03 \x01(\x01\x12\x14\n\x0cspeed_factor\x18\x04 \x01(\x01\"d\n$FrankaJointVelocityControllerMessage\x12\x18\n\x04goal\x18\x01 \x01(\x0b\x32\n.JointGoal\x12\x10\n\x08kp_gains\x18\x02 \x01(\x01\x12\x10\n\x08kd_gains\x18\x03 \x01(\x01\"b\n\"FrankaJointTorqueControllerMessage\x12\x18\n\x04goal\x18\x01 \x01(\x0b\x32\n.JointGoal\x12\x10\n\x08kp_gains\x18\x02 \x01(\x01\x12\x10\n\x08kd_gains\x18\x03 \x01(\x01\"\xf5\x05\n\x14\x46rankaControlMessage\x12\x13\n\x0btermination\x18\x01 \x01(\x08\x12=\n\x0f\x63ontroller_type\x18\x02 \x01(\x0e\x32$.FrankaControlMessage.ControllerType\x12J\n\x16traj_interpolator_type\x18\x03 \x01(\x0e\x32*.FrankaControlMessage.TrajInterpolatorType\x12\'\n\x1ftraj_interpolator_time_fraction\x18\x04 \x01(\x01\x12)\n\x0b\x63ontrol_msg\x18\x05 \x01(\x0b\x32\x14.google.protobuf.Any\x12\x0f\n\x07timeout\x18\x06 \x01(\x01\x12\x39\n\x13state_estimator_msg\x18\x07 \x01(\x0b\x32\x1c.FrankaStateEstimatorMessage\"\xae\x01\n\x0e\x43ontrollerType\x12\x0e\n\nNO_CONTROL\x10\x00\x12\x0c\n\x08OSC_POSE\x10\x01\x12\x10\n\x0cOSC_POSITION\x10\x02\x12\x12\n\x0eJOINT_POSITION\x10\x03\x12\x13\n\x0fJOINT_IMPEDANCE\x10\x04\x12\x12\n\x0eJOINT_VELOCITY\x10\x05\x12\n\n\x06TORQUE\x10\x06\x12\x0b\n\x07OSC_YAW\x10\x07\x12\x16\n\x12\x43\x41RTESIAN_VELOCITY\x10\x08\"\xeb\x01\n\x14TrajInterpolatorType\x12\t\n\x05NO_OP\x10\x00\x12\x13\n\x0fLINEAR_POSITION\x10\x01\x12\x0f\n\x0bLINEAR_POSE\x10\x02\x12\x11\n\rMIN_JERK_POSE\x10\x03\x12\x19\n\x15SMOOTH_JOINT_POSITION\x10\x04\x12\x1b\n\x17MIN_JERK_JOINT_POSITION\x10\x05\x12\x19\n\x15LINEAR_JOINT_POSITION\x10\x06\x12\x1d\n\x19\x43OSINE_CARTESIAN_VELOCITY\x10\x07\x12\x1d\n\x19LINEAR_CARTESIAN_VELOCITY\x10\x08\x62\x06proto3'
   ,
   dependencies=[google_dot_protobuf_dot_any__pb2.DESCRIPTOR,])
 
@@ -106,8 +106,8 @@ _FRANKACONTROLMESSAGE_CONTROLLERTYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2182,
-  serialized_end=2356,
+  serialized_start=2205,
+  serialized_end=2379,
 )
 _sym_db.RegisterEnumDescriptor(_FRANKACONTROLMESSAGE_CONTROLLERTYPE)
 
@@ -166,8 +166,8 @@ _FRANKACONTROLMESSAGE_TRAJINTERPOLATORTYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2359,
-  serialized_end=2594,
+  serialized_start=2382,
+  serialized_end=2617,
 )
 _sym_db.RegisterEnumDescriptor(_FRANKACONTROLMESSAGE_TRAJINTERPOLATORTYPE)
 
@@ -796,6 +796,13 @@ _FRANKAJOINTPOSITIONCONTROLLERMESSAGE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='dq_reference', full_name='FrankaJointPositionControllerMessage.dq_reference', index=4,
+      number=5, type=1, cpp_type=5, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -808,8 +815,8 @@ _FRANKAJOINTPOSITIONCONTROLLERMESSAGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1296,
-  serialized_end=1418,
+  serialized_start=1297,
+  serialized_end=1441,
 )
 
 
@@ -854,8 +861,8 @@ _FRANKAJOINTIMPEDANCECONTROLLERMESSAGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1420,
-  serialized_end=1509,
+  serialized_start=1443,
+  serialized_end=1532,
 )
 
 
@@ -907,8 +914,8 @@ _FRANKACARTESIANVELOCITYCONTROLLERMESSAGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1511,
-  serialized_end=1632,
+  serialized_start=1534,
+  serialized_end=1655,
 )
 
 
@@ -953,8 +960,8 @@ _FRANKAJOINTVELOCITYCONTROLLERMESSAGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1634,
-  serialized_end=1734,
+  serialized_start=1657,
+  serialized_end=1757,
 )
 
 
@@ -999,8 +1006,8 @@ _FRANKAJOINTTORQUECONTROLLERMESSAGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1736,
-  serialized_end=1834,
+  serialized_start=1759,
+  serialized_end=1857,
 )
 
 
@@ -1075,8 +1082,8 @@ _FRANKACONTROLMESSAGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1837,
-  serialized_end=2594,
+  serialized_start=1860,
+  serialized_end=2617,
 )
 
 _FRANKASTATEESTIMATORMESSAGE.fields_by_name['estimator_type'].enum_type = _FRANKASTATEESTIMATORMESSAGE_ESTIMATORTYPE

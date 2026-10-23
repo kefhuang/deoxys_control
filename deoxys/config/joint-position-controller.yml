@@ -3,8 +3,9 @@ controller_type: JOINT_POSITION
 is_delta: false
 
 traj_interpolator_cfg:
-  traj_interpolator_type: SMOOTH_JOINT_POSITION
-  time_fraction: 0.3
+  # Legacy wire name; the backend executes this as its stateful C2 stream.
+  traj_interpolator_type: LINEAR_JOINT_POSITION
+  time_fraction: 1.0
 
 state_estimator_cfg:
   is_estimation: false

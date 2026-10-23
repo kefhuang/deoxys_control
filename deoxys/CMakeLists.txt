@@ -6,6 +6,8 @@ project (deoxys
   LANGUAGES CXX
   )
 
+enable_testing()
+
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -83,6 +85,7 @@ if (BUILD_FRANKA)
     franka-interface/src/controllers/osc_yaw_impedance.cpp
     franka-interface/src/controllers/joint_position.cpp
     franka-interface/src/controllers/joint_impedance.cpp
+    franka-interface/src/controllers/joint_velocity.cpp
     franka-interface/src/controllers/cartesian_velocity.cpp
     )
   
@@ -93,6 +96,10 @@ if (BUILD_FRANKA)
     franka-interface/src/utils/zmq_utils.cpp
     ${CONTROLLERS})
   target_link_libraries(shared_utils deoxys::shared_protobuf ${FRANKA_LIBS})
+
+  add_executable(joint-velocity-benchmark
+    franka-interface/src/examples/joint_velocity_benchmark.cpp)
+  target_link_libraries(joint-velocity-benchmark ${FRANKA_LIBS})
   add_library(deoxys::shared_utils ALIAS shared_utils)
 
   add_executable(franka-interface franka-interface/src/franka_control_node.cpp)
@@ -139,6 +146,15 @@ if (BUILD_FRANKA)
     franka-interface/src/test/test_cosine_cartesian_velocity_traj_interpolator.cpp)
   target_link_libraries(cosine-cartesian-velocity-interpolator-test
     Eigen3::Eigen3 Threads::Threads)
+
+  # Test lock-free joint-position command transfer, the 1 kHz C2 desired-state
+  # tracker, and the graceful position-control stop without hardware.
+  add_executable(joint-position-realtime-utils-test
+    franka-interface/src/test/test_joint_position_realtime_utils.cpp)
+  target_link_libraries(joint-position-realtime-utils-test
+    Eigen3::Eigen3 Franka::Franka Threads::Threads)
+  add_test(NAME joint-position-realtime-utils
+    COMMAND joint-position-realtime-utils-test)
 
   # Test the safety-critical Cartesian velocity transition duration.
   add_executable(cartesian-velocity-controller-config-test

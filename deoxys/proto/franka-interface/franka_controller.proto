@@ -99,6 +99,10 @@ message FrankaJointPositionControllerMessage {
   double kp_gains = 2;
   double kd_gains = 3;
   double speed_factor = 4;
+  // Optional joint-velocity reference paired with goal.  An empty field keeps
+  // legacy point-target behavior; a seven-element field describes a moving
+  // reference that may be crossed with non-zero velocity.
+  repeated double dq_reference = 5;
 }
 
 message FrankaJointImpedanceControllerMessage {

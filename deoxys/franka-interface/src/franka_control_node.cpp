@@ -1,6 +1,7 @@
 // Copyright 2022 Yifeng Zhu
 
 #include <atomic>
+#include <cmath>
 #include <iostream>
 #include <mutex>
 #include <sstream>
@@ -8,6 +9,7 @@
 #include <thread>
 
 #include <franka/exception.h>
+#include <franka/lowpass_filter.h>
 #include <franka/model.h>
 #include <franka/rate_limiting.h>
 #include <franka/robot.h>
@@ -26,11 +28,13 @@
 
 // Callback
 #include "utils/control_callbacks/joint_pos_callback.h"
+#include "utils/control_callbacks/joint_velocity_callback.h"
 #include "utils/control_callbacks/torque_callback.h"
 #include "utils/control_callbacks/cartesian_velocity_calllback.h"
 
 // Interpolators
 #include "utils/traj_interpolators/linear_joint_position_traj_interpolator.h"
+#include "utils/traj_interpolators/streaming_joint_position_traj_interpolator.h"
 #include "utils/traj_interpolators/linear_pose_traj_interpolator.h"
 #include "utils/traj_interpolators/linear_position_traj_interpolator.h"
 #include "utils/traj_interpolators/min_jerk_joint_position_traj_interpolator.h"
@@ -45,6 +49,7 @@
 // Controllers
 #include "controllers/joint_impedance.h"
 #include "controllers/joint_position.h"
+#include "controllers/joint_velocity.h"
 #include "controllers/osc_impedance.h"
 #include "controllers/osc_position_impedance.h"
 #include "controllers/osc_yaw_impedance.h"
@@ -162,6 +167,46 @@ bool GetStateEstimatorType(const FrankaControlMessage franka_control_msg,
   return true;
 }
 
+bool ParseJointPositionCommand(
+    const FrankaControlMessage &control_msg, const double time_fraction,
+    control_utils::JointPositionCommand &command) {
+  FrankaJointPositionControllerMessage joint_position_msg;
+  if (!control_msg.control_msg().UnpackTo(&joint_position_msg)) {
+    return false;
+  }
+
+  const auto &goal = joint_position_msg.goal();
+  command.positions = {{goal.q1(), goal.q2(), goal.q3(), goal.q4(), goal.q5(),
+                        goal.q6(), goal.q7()}};
+  command.velocities.fill(0.0);
+  if (joint_position_msg.dq_reference_size() != 0 &&
+      joint_position_msg.dq_reference_size() != 7) {
+    return false;
+  }
+  for (int index = 0; index < joint_position_msg.dq_reference_size();
+       ++index) {
+    command.velocities[static_cast<std::size_t>(index)] =
+        joint_position_msg.dq_reference(index);
+  }
+  command.is_delta = goal.is_delta();
+  command.time_fraction = time_fraction;
+  for (const double position : command.positions) {
+    if (!std::isfinite(position)) {
+      return false;
+    }
+  }
+  for (const double velocity : command.velocities) {
+    if (!std::isfinite(velocity)) {
+      return false;
+    }
+  }
+  return std::isfinite(command.time_fraction) && command.time_fraction > 0.0;
+}
+
+bool IsJointPositionInterpolator(const TrajInterpolatorType type) {
+  return type == TrajInterpolatorType::LINEAR_JOINT_POSITION;
+}
+
 int main(int argc, char **argv) {
   // Load cofigs
   if (argc < 2) {
@@ -250,6 +295,13 @@ int main(int argc, char **argv) {
         std::make_shared<SharedMemory>();
     global_handler->logger = log_utils::get_logger(
         config["ARM_LOGGER"]["CONSOLE"]["LOGGER_NAME"].as<std::string>());
+    global_handler->logger->info(
+        "Joint-position streaming revision: moving-reference-tracker-v4");
+    if (!global_handler->joint_position_commands.IsLockFree()) {
+      global_handler->logger->error(
+          "Joint-position mailbox atomics are not lock-free on this platform");
+      return -1;
+    }
     
     // Read torque limits from the global config
     global_handler->max_torque =
@@ -282,6 +334,9 @@ int main(int argc, char **argv) {
     current_state_info->joint_positions =
         Eigen::VectorXd::Map(init_state.q_d.data(), 7);
     goal_state_info->joint_positions = current_state_info->joint_positions;
+    current_state_info->joint_velocities = Eigen::VectorXd::Map(init_state.dq.data(), 7);
+    goal_state_info->joint_velocities.setZero();
+    for (auto &target : global_handler->joint_velocity_target) target.store(0.0);
 
     // Log information about current arm control frequency
     global_handler->logger->info(
@@ -316,9 +371,86 @@ int main(int argc, char **argv) {
     state_publisher->UpdateNewState(init_state, &model);
 
     ControllerType controller_type = ControllerType::NO_CONTROL;
+    std::atomic<ControllerType> active_controller_type(
+        ControllerType::NO_CONTROL);
     TrajInterpolatorType traj_interpolator_type =
         TrajInterpolatorType::NO_INTERPOLATION;
     StateEstimatorType state_estimator_type = StateEstimatorType::NO_ESTIMATOR;
+
+    const auto request_joint_position_stop =
+        [&](const bool request_termination) {
+          if (request_termination) {
+            global_handler->joint_position_termination_requested.store(
+                true, std::memory_order_release);
+            // This stops the outer threads, but it does not interrupt a
+            // blocking robot.control() call.  The active callback still sees
+            // stop_requested below, holds q_d until settled, and only then
+            // returns MotionFinished.
+            global_handler->termination.store(true,
+                                              std::memory_order_release);
+          }
+
+          while (true) {
+            JointPositionSessionState state =
+                global_handler->joint_position_session.load(
+                    std::memory_order_acquire);
+            if (state == JointPositionSessionState::ACTIVE) {
+              JointPositionSessionState expected =
+                  JointPositionSessionState::ACTIVE;
+              if (!global_handler->joint_position_session.compare_exchange_weak(
+                      expected, JointPositionSessionState::STOPPING,
+                      std::memory_order_acq_rel,
+                      std::memory_order_acquire)) {
+                continue;
+              }
+              global_handler->joint_position_stop_requested.store(
+                  true, std::memory_order_release);
+              return;
+            }
+            if (state == JointPositionSessionState::STOPPING) {
+              // STOPPING may concurrently advance to STOPPED and IDLE.  Never
+              // write the stale STOPPING value back, or the session can move
+              // backwards after its callback has already exited.
+              global_handler->joint_position_stop_requested.store(
+                  true, std::memory_order_release);
+              return;
+            }
+            if (state == JointPositionSessionState::READY) {
+              JointPositionSessionState expected =
+                  JointPositionSessionState::READY;
+              if (!global_handler->joint_position_session.compare_exchange_weak(
+                      expected, JointPositionSessionState::IDLE,
+                      std::memory_order_acq_rel,
+                      std::memory_order_acquire)) {
+                continue;
+              }
+              global_handler->joint_position_commands.DiscardAll();
+              global_handler->running.store(false, std::memory_order_release);
+              if (request_termination) {
+                global_handler->termination.store(true,
+                                                  std::memory_order_release);
+              }
+              return;
+            }
+            if (state == JointPositionSessionState::STARTING) {
+              JointPositionSessionState expected =
+                  JointPositionSessionState::STARTING;
+              if (!global_handler->joint_position_session.compare_exchange_weak(
+                      expected, JointPositionSessionState::IDLE,
+                      std::memory_order_acq_rel,
+                      std::memory_order_acquire)) {
+                continue;
+              }
+              global_handler->joint_position_commands.DiscardAll();
+            }
+            global_handler->running.store(false, std::memory_order_release);
+            if (request_termination) {
+              global_handler->termination.store(true,
+                                                std::memory_order_release);
+            }
+            return;
+          }
+        };
 
     // control message subscription thread
     std::thread control_msg_sub([&]() {
@@ -334,8 +466,14 @@ int main(int argc, char **argv) {
           global_handler->logger->debug("Counter {0}",
                                         global_handler->no_msg_counter);
           if (global_handler->no_msg_counter >= 20) {
-            global_handler->running = false;
-            global_handler->termination = true;
+            if (global_handler->joint_position_session.load(
+                    std::memory_order_acquire) !=
+                JointPositionSessionState::IDLE) {
+              request_joint_position_stop(true);
+            } else {
+              global_handler->running = false;
+              global_handler->termination = true;
+            }
             global_handler->logger->debug(
                 "No valid messages received in 20 steps");
           }
@@ -346,12 +484,27 @@ int main(int argc, char **argv) {
 
         if (control_msg.ParseFromString(msg)) {
           global_handler->no_msg_counter = 0;
+          const ControllerType active_controller =
+              active_controller_type.load(std::memory_order_acquire);
           if (control_msg.termination()) {
-            global_handler->running = false;
-            global_handler->termination = true;
+            if (global_handler->joint_position_session.load(
+                    std::memory_order_acquire) !=
+                JointPositionSessionState::IDLE) {
+              request_joint_position_stop(true);
+            } else {
+              global_handler->running = false;
+              global_handler->termination = true;
+            }
+            if (global_handler->termination.load(std::memory_order_acquire)) {
+              continue;
+            }
           }
           // Determine controller message type
-          if (control_command.mutex.try_lock()) {
+          {
+            // This is the non-real-time ZMQ thread. Waiting briefly for the
+            // main loop to finish copying the previous command is preferable
+            // to processing the new protobuf with stale controller metadata.
+            std::lock_guard<std::mutex> lock(control_command.mutex);
             if (!GetControllerType(control_msg,
                                    control_command.controller_type)) {
               global_handler->logger->warn("No controller type is specified");
@@ -375,18 +528,117 @@ int main(int argc, char **argv) {
             }
             control_command.timeout = control_msg.timeout();
             control_command.control_msg = control_msg;
-            control_command.mutex.unlock();
+          }
+
+          const JointPositionSessionState joint_position_session =
+              global_handler->joint_position_session.load(
+                  std::memory_order_acquire);
+          if (control_command.controller_type !=
+                  ControllerType::JOINT_POSITION &&
+              joint_position_session != JointPositionSessionState::IDLE) {
+            request_joint_position_stop(control_msg.termination());
+            continue;
+          }
+
+          if (control_command.controller_type ==
+              ControllerType::JOINT_POSITION) {
+            if (!IsJointPositionInterpolator(
+                    control_command.traj_interpolator_type)) {
+              global_handler->logger->error(
+                  "Streaming JOINT_POSITION requires "
+                  "LINEAR_JOINT_POSITION");
+              if (joint_position_session != JointPositionSessionState::IDLE) {
+                request_joint_position_stop(false);
+              }
+              continue;
+            }
+
+            control_utils::JointPositionCommand joint_position_command;
+            if (!ParseJointPositionCommand(
+                    control_msg,
+                    global_handler->traj_interpolator_time_fraction,
+                    joint_position_command)) {
+              global_handler->logger->error(
+                  "Rejecting malformed or non-finite joint-position target");
+              if (joint_position_session != JointPositionSessionState::IDLE) {
+                request_joint_position_stop(false);
+              }
+              continue;
+            }
+
+            JointPositionSessionState state = joint_position_session;
+            if (state == JointPositionSessionState::IDLE) {
+              if (active_controller != ControllerType::NO_CONTROL) {
+                global_handler->logger->error(
+                    "Rejecting JOINT_POSITION until the active controller "
+                    "finishes");
+                continue;
+              }
+              JointPositionSessionState expected =
+                  JointPositionSessionState::IDLE;
+              if (!global_handler->joint_position_session.compare_exchange_strong(
+                      expected, JointPositionSessionState::STARTING,
+                      std::memory_order_acq_rel,
+                      std::memory_order_acquire)) {
+                state = expected;
+              } else {
+                global_handler->joint_position_commands.DiscardAll();
+                global_handler->joint_position_stop_requested.store(
+                    false, std::memory_order_release);
+                global_handler->joint_position_termination_requested.store(
+                    false, std::memory_order_release);
+                global_handler->controller_ptr =
+                    std::make_shared<controller::JointPositionController>(model);
+                global_handler->traj_interpolator_ptr = std::make_shared<
+                    traj_utils::StreamingJointPositionTrajInterpolator>();
+                traj_interpolator_type =
+                    TrajInterpolatorType::LINEAR_JOINT_POSITION;
+                if (!global_handler->joint_position_commands.Push(
+                        joint_position_command)) {
+                  global_handler->logger->error(
+                      "Failed to publish the first joint-position target");
+                  global_handler->joint_position_session.store(
+                      JointPositionSessionState::IDLE,
+                      std::memory_order_release);
+                  global_handler->running.store(false,
+                                                std::memory_order_release);
+                  continue;
+                }
+                global_handler->start.store(true, std::memory_order_release);
+                global_handler->joint_position_session.store(
+                    JointPositionSessionState::READY,
+                    std::memory_order_release);
+                global_handler->running.store(true,
+                                              std::memory_order_release);
+                global_handler->logger->info(
+                    "Joint position session ready with paired position/velocity "
+                    "reference tracker (v4)");
+                continue;
+              }
+            }
+
+            if (state == JointPositionSessionState::READY ||
+                state == JointPositionSessionState::ACTIVE) {
+              if (!global_handler->joint_position_commands.Push(
+                      joint_position_command)) {
+                global_handler->logger->error(
+                    "Joint-position mailbox is full; requesting a safe stop");
+                request_joint_position_stop(false);
+              }
+            }
+            // STOPPING/STOPPED sessions deliberately ignore late commands.
+            continue;
           }
 
           if (control_command.controller_type == ControllerType::OSC_POSE &&
-              controller_type == ControllerType::NO_CONTROL) {
+              active_controller == ControllerType::NO_CONTROL) {
             global_handler->controller_ptr =
                 std::make_shared<controller::OSCImpedanceController>(model);
             global_handler->logger->info("Initialize OSC Pose");
             global_handler->running = true;
           } else if (control_command.controller_type ==
                          ControllerType::OSC_POSITION &&
-                     controller_type == ControllerType::NO_CONTROL) {
+                     active_controller == ControllerType::NO_CONTROL) {
             global_handler->controller_ptr =
                 std::make_shared<controller::OSCPositionImpedanceController>(
                     model);
@@ -394,41 +646,41 @@ int main(int argc, char **argv) {
             global_handler->running = true;
           } else if (control_command.controller_type ==
                          ControllerType::OSC_YAW &&
-                     controller_type == ControllerType::NO_CONTROL) {
+                     active_controller == ControllerType::NO_CONTROL) {
             global_handler->controller_ptr =
                 std::make_shared<controller::OSCYawImpedanceController>(model);
             global_handler->logger->info("Initialize OSC Yaw");
             global_handler->running = true;
           } else if (control_command.controller_type ==
-                         ControllerType::JOINT_POSITION &&
-                     controller_type == ControllerType::NO_CONTROL) {
-            global_handler->controller_ptr =
-                std::make_shared<controller::JointPositionController>(model);
-            global_handler->logger->info("Initialize Joint Position");
-            global_handler->running = true;
-          } else if (control_command.controller_type ==
                          ControllerType::JOINT_IMPEDANCE &&
-                     controller_type == ControllerType::NO_CONTROL) {
+                     active_controller == ControllerType::NO_CONTROL) {
             global_handler->controller_ptr =
                 std::make_shared<controller::JointImpedanceController>(model);
             global_handler->logger->info("Initialize Joint Impedance");
             global_handler->running = true;
           } else if (control_command.controller_type ==
+                         ControllerType::JOINT_VELOCITY &&
+                     active_controller == ControllerType::NO_CONTROL) {
+            global_handler->controller_ptr =
+                std::make_shared<controller::JointVelocityController>(model);
+            global_handler->logger->info("Initialize Joint Velocity");
+            global_handler->running = true;
+          } else if (control_command.controller_type ==
                          ControllerType::CARTESIAN_VELOCITY &&
-                     controller_type == ControllerType::NO_CONTROL) {
+                     active_controller == ControllerType::NO_CONTROL) {
             global_handler->controller_ptr =
                 std::make_shared<controller::CartesianVelocityController>(model);
             global_handler->logger->info("Initialize Cartesian Velocity");
             global_handler->running = true;            
           } else if (control_command.controller_type ==
                          ControllerType::NO_CONTROL ||
-                     controller_type == ControllerType::NO_CONTROL) {
+                     active_controller == ControllerType::NO_CONTROL) {
             global_handler->running = false;
             continue;
           }
 
           if (control_command.controller_type != ControllerType::NO_CONTROL &&
-              controller_type == ControllerType::NO_CONTROL) {
+              active_controller == ControllerType::NO_CONTROL) {
             if (control_command.state_estimator_type ==
                 StateEstimatorType::EXPONENTIAL_SMOOTHING_ESTIMATOR) {
               global_handler->controller_ptr->SetStateEstimator(
@@ -497,6 +749,21 @@ int main(int argc, char **argv) {
 
           global_handler->controller_ptr->ComputeGoal(current_state_info,
                                                       goal_state_info);
+          if (control_command.controller_type == ControllerType::JOINT_VELOCITY) {
+            for (size_t i = 0; i < 7; ++i) {
+              global_handler->joint_velocity_target[i].store(
+                  goal_state_info->joint_velocities[i], std::memory_order_relaxed);
+            }
+          }
+          if (control_command.controller_type == ControllerType::JOINT_VELOCITY &&
+              goal_state_info->joint_velocities.cwiseAbs().maxCoeff() > 1e-6) {
+            global_handler->logger->debug(
+                "Joint velocity target: [{0}, {1}, {2}, {3}, {4}, {5}, {6}]",
+                goal_state_info->joint_velocities[0], goal_state_info->joint_velocities[1],
+                goal_state_info->joint_velocities[2], goal_state_info->joint_velocities[3],
+                goal_state_info->joint_velocities[4], goal_state_info->joint_velocities[5],
+                goal_state_info->joint_velocities[6]);
+          }
           switch (control_command.traj_interpolator_type) {
           case TrajInterpolatorType::LINEAR_POSE:
           case TrajInterpolatorType::LINEAR_POSITION:
@@ -544,13 +811,26 @@ int main(int argc, char **argv) {
       // If controller_type changes, exit robot control loop and reinitialize.
       FrankaControlMessage control_msg;
 
-      if (control_command.mutex.try_lock()) {
+      {
+        std::lock_guard<std::mutex> lock(control_command.mutex);
         controller_type = control_command.controller_type;
         control_msg = control_command.control_msg;
-        control_command.mutex.unlock();
       }
 
       if (global_handler->running) {
+        const bool joint_position_control =
+            controller_type == ControllerType::JOINT_POSITION;
+        if (joint_position_control) {
+          JointPositionSessionState expected =
+              JointPositionSessionState::READY;
+          if (!global_handler->joint_position_session.compare_exchange_strong(
+                  expected, JointPositionSessionState::ACTIVE,
+                  std::memory_order_acq_rel, std::memory_order_acquire)) {
+            continue;
+          }
+        }
+        active_controller_type.store(controller_type,
+                                     std::memory_order_release);
         const auto read_result =
             control_exception_utils::RunWithShutdownOnFrankaException(
                 "robot.readOnce",
@@ -561,6 +841,13 @@ int main(int argc, char **argv) {
                 global_handler->running,
                 global_handler->termination);
         if (!read_result.succeeded) {
+          active_controller_type.store(ControllerType::NO_CONTROL,
+                                       std::memory_order_release);
+          if (joint_position_control) {
+            global_handler->joint_position_session.store(
+                JointPositionSessionState::IDLE,
+                std::memory_order_release);
+          }
           global_handler->logger->error("{0} failed: {1}",
                                         read_result.operation_name,
                                         read_result.error_message);
@@ -594,8 +881,15 @@ int main(int argc, char **argv) {
                     global_handler->logger->info("Joint position callback");
                     robot.control(control_callbacks::CreateJointPositionCallback(
                         global_handler, state_publisher, model,
-                        current_state_info, goal_state_info, policy_rate,
-                        traj_rate));
+                        current_state_info, policy_rate, traj_rate),
+                        franka::ControllerMode::kJointImpedance,
+                        true,
+                        franka::kMaxCutoffFrequency);
+                  } else if (controller_type == ControllerType::JOINT_VELOCITY) {
+                    global_handler->logger->info("Joint velocity callback");
+                    robot.control(control_callbacks::CreateJointVelocityCallback(
+                        global_handler, state_publisher, model,
+                        current_state_info, goal_state_info));
                   } else if (controller_type ==
                              ControllerType::CARTESIAN_VELOCITY) {
                     global_handler->logger->info(
@@ -610,6 +904,20 @@ int main(int argc, char **argv) {
                 },
                 global_handler->running,
                 global_handler->termination);
+        active_controller_type.store(ControllerType::NO_CONTROL,
+                                     std::memory_order_release);
+        if (joint_position_control) {
+          global_handler->joint_position_session.store(
+              JointPositionSessionState::IDLE,
+              std::memory_order_release);
+          // The requester promotes termination immediately; this final check
+          // also covers a callback that observed the per-session flag first.
+          if (global_handler->joint_position_termination_requested.load(
+                  std::memory_order_acquire)) {
+            global_handler->termination.store(true,
+                                              std::memory_order_release);
+          }
+        }
 
         if (!control_result.succeeded) {
           global_handler->logger->error("{0} failed: {1}",

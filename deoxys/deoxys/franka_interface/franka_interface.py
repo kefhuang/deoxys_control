@@ -221,12 +221,27 @@ class FrankaInterface:
 
         logger.debug("Preprocess fnished")
 
+    def prepare_controller(self, controller_type: str) -> None:
+        """Finish the blocking NO_CONTROL transition before arming a mode.
+
+        Preparing is idempotent for the current controller type.  Bimanual
+        callers can therefore prepare both interfaces while neither robot is
+        under active control, then arm both modes without a one-second gap
+        that would trip the first robot's command watchdog.
+        """
+        if self._last_controller_type == controller_type:
+            return
+        self.preprocess()
+        self._last_controller_type = controller_type
+
     def control(
         self,
         controller_type: str,
         action: Union[np.ndarray, list],
         controller_cfg: dict = None,
         termination: bool = False,
+        control_gripper: bool = True,
+        joint_velocity_reference: Union[np.ndarray, list, None] = None,
     ):
         """A function that controls every step on the policy level.
 
@@ -235,6 +250,10 @@ class FrankaInterface:
             action (Union[np.ndarray, list]): The action command for the controller.
             controller_cfg (dict, optional): Controller configuration that corresponds to the first argument`controller_type`. Defaults to None.
             termination (bool, optional): If set True, the control will be terminated. Defaults to False.
+            control_gripper (bool, optional): Whether the final action element should also control the gripper. Defaults to True.
+            joint_velocity_reference (Union[np.ndarray, list, None], optional):
+                Seven finite joint velocities paired with a JOINT_POSITION
+                target. Omit for legacy point-target behavior.
         """
         action = np.array(action)
         if self.last_time == None:
@@ -249,9 +268,7 @@ class FrankaInterface:
                 time.sleep(remaining_time)
             self.last_time = time.time_ns()
 
-        if self._last_controller_type != controller_type:
-            self.preprocess()
-            self._last_controller_type = controller_type
+        self.prepare_controller(controller_type)
 
         controller_cfg = verify_controller_config(controller_cfg, use_default=True)
 
@@ -391,15 +408,27 @@ class FrankaInterface:
             joint_pos_msg.speed_factor = 0.1
             goal = action_to_joint_pos_goal(action, is_delta=controller_cfg.is_delta)
 
+            if joint_velocity_reference is not None:
+                velocity_reference = np.asarray(
+                    joint_velocity_reference, dtype=float
+                )
+                if velocity_reference.shape != (7,) or not np.all(
+                    np.isfinite(velocity_reference)
+                ):
+                    raise ValueError(
+                        "joint_velocity_reference must be a finite shape-(7,) vector"
+                    )
+                joint_pos_msg.dq_reference.extend(velocity_reference.tolist())
+
             joint_pos_msg.goal.CopyFrom(goal)
 
             control_msg = franka_controller_pb2.FrankaControlMessage()
             control_msg.controller_type = (
                 franka_controller_pb2.FrankaControlMessage.ControllerType.JOINT_POSITION
             )
-            control_msg.traj_interpolator_type = (
-                franka_controller_pb2.FrankaControlMessage.TrajInterpolatorType.SMOOTH_JOINT_POSITION
-            )
+            control_msg.traj_interpolator_type = TRAJ_INTERPOLATOR_MAPPING[
+                controller_cfg.traj_interpolator_cfg.traj_interpolator_type
+            ]
             control_msg.traj_interpolator_time_fraction = (
                 controller_cfg.traj_interpolator_cfg["time_fraction"]
             )
@@ -446,6 +475,20 @@ class FrankaInterface:
             msg_str = control_msg.SerializeToString()
             self._publisher.send(msg_str)
 
+        elif controller_type == "JOINT_VELOCITY":
+            assert controller_cfg is not None
+            assert len(action) == 7 + 1
+            joint_velocity_msg = franka_controller_pb2.FrankaJointVelocityControllerMessage()
+            joint_velocity_msg.goal.CopyFrom(action_to_joint_pos_goal(action, is_delta=False))
+            control_msg = franka_controller_pb2.FrankaControlMessage()
+            control_msg.controller_type = franka_controller_pb2.FrankaControlMessage.ControllerType.JOINT_VELOCITY
+            control_msg.traj_interpolator_type = franka_controller_pb2.FrankaControlMessage.TrajInterpolatorType.NO_OP
+            control_msg.control_msg.Pack(joint_velocity_msg)
+            control_msg.timeout = 0.2
+            control_msg.termination = termination
+            control_msg.state_estimator_msg.CopyFrom(state_estimator_msg)
+            self._publisher.send(control_msg.SerializeToString())
+
         elif controller_type == "CARTESIAN_VELOCITY":
             assert controller_cfg is not None
 
@@ -479,7 +522,7 @@ class FrankaInterface:
             msg_str = control_msg.SerializeToString()
             self._publisher.send(msg_str)
 
-        if self.has_gripper:
+        if self.has_gripper and control_gripper:
             self.gripper_control(action[self.last_gripper_dim])
 
         if self.use_visualizer and len(self._state_buffer) > 0:
@@ -510,8 +553,8 @@ class FrankaInterface:
             self._gripper_publisher.send(gripper_control_msg.SerializeToString())
         elif action >= 0.0:  #  and self.last_gripper_action == 0:
             grasp_msg = franka_controller_pb2.FrankaGripperGraspMessage()
-            grasp_msg.width = -0.01
-            grasp_msg.speed = 0.5
+            grasp_msg.width = 0.0
+            grasp_msg.speed = 0.1
             grasp_msg.force = 30.0
             grasp_msg.epsilon_inner = 0.08
             grasp_msg.epsilon_outer = 0.08
