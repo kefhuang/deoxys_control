@@ -11,7 +11,7 @@ logger = get_deoxys_example_logger()
 
 def main():
     robot_interface = FrankaInterface(
-        config_root + "/charmander.yml", use_visualizer=False
+        config_root + "/franka-two.yml", use_visualizer=False
     )
 
     # 1. 开

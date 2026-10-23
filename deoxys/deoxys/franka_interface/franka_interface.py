@@ -1,4 +1,5 @@
 import logging
+import os
 import threading
 import time
 from multiprocessing import Process
@@ -13,6 +14,7 @@ from deoxys.franka_interface.visualizer import visualizer_factory
 from deoxys.utils import transform_utils
 from deoxys.utils.config_utils import verify_controller_config
 from deoxys.utils.yaml_config import YamlConfig
+from deoxys import config_root
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +87,12 @@ class FrankaInterface:
         has_gripper: bool = True,
         use_visualizer: bool = False,
         automatic_gripper_reset: bool=True,
+        gripper_cfg_file: str = None,
     ):
         general_cfg = YamlConfig(general_cfg_file).as_easydict()
+        if gripper_cfg_file is None:
+            gripper_cfg_file = os.path.join(config_root, "gripper-config.yml")
+        self._gripper_cfg = YamlConfig(gripper_cfg_file).as_easydict()
         self._name = general_cfg.PC.NAME
         self._ip = general_cfg.NUC.IP
         self._pub_port = general_cfg.NUC.SUB_PORT
@@ -198,7 +204,7 @@ class FrankaInterface:
             gripper_control_msg = franka_controller_pb2.FrankaGripperControlMessage()
             move_msg = franka_controller_pb2.FrankaGripperMoveMessage()
             move_msg.width = 0.08
-            move_msg.speed = 0.1
+            move_msg.speed = self._gripper_cfg.move_speed
             gripper_control_msg.control_msg.Pack(move_msg)
 
             logger.debug("Moving Command")
@@ -502,7 +508,7 @@ class FrankaInterface:
         if action < 0.0:  #  and self.last_gripper_action == 1):
             move_msg = franka_controller_pb2.FrankaGripperMoveMessage()
             move_msg.width = 0.08 * np.abs(action)
-            move_msg.speed = 0.1
+            move_msg.speed = self._gripper_cfg.move_speed
             gripper_control_msg.control_msg.Pack(move_msg)
 
             logger.debug("Gripper opening")
@@ -511,10 +517,10 @@ class FrankaInterface:
         elif action >= 0.0:  #  and self.last_gripper_action == 0:
             grasp_msg = franka_controller_pb2.FrankaGripperGraspMessage()
             grasp_msg.width = -0.01
-            grasp_msg.speed = 0.5
-            grasp_msg.force = 30.0
-            grasp_msg.epsilon_inner = 0.08
-            grasp_msg.epsilon_outer = 0.08
+            grasp_msg.speed = self._gripper_cfg.grasp_speed
+            grasp_msg.force = self._gripper_cfg.grasp_force
+            grasp_msg.epsilon_inner = self._gripper_cfg.grasp_epsilon_inner
+            grasp_msg.epsilon_outer = self._gripper_cfg.grasp_epsilon_outer
 
             gripper_control_msg.control_msg.Pack(grasp_msg)
 

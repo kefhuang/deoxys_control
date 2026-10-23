@@ -1,0 +1,5 @@
+grasp_force: 30.0
+grasp_speed: 0.5
+move_speed: 0.1
+grasp_epsilon_inner: 0.08
+grasp_epsilon_outer: 0.08
